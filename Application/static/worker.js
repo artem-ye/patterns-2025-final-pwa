@@ -5,6 +5,7 @@ const ASSETS = [
   '/index.html',
   '/styles.css',
   '/application.js',
+  '/lib/pwa.js',
   '/worker.js',
   '/database.js',
   '/manifest.json',

@@ -1,6 +1,6 @@
-import { PWA } from './pwa.js';
+import { PWA } from './lib/pwa.js';
 
-const VERSION = '1.1.3';
+const VERSION = '1.1.1';
 
 class Logger {
   #output;
