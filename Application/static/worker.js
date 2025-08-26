@@ -37,7 +37,7 @@ const broadcast = async (packet, exclude = null) => {
 class WsClient {
   reconnectInterval = 0;
   pingInterval = 0;
-  callback = null;
+  emit = null;
   connection = null;
   connected = false;
   connecting = false;
@@ -45,11 +45,11 @@ class WsClient {
   reconnectTimer = null;
   pingTimer = null;
 
-  constructor(options, callback) {
+  constructor(options, listener) {
     const { reconnectInterval, pingInterval } = options;
     this.reconnectInterval = reconnectInterval ?? 0;
     this.pingInterval = pingInterval ?? 0;
-    this.callback = callback;
+    this.emit = listener;
   }
 
   async connect() {
@@ -67,7 +67,7 @@ class WsClient {
       if (this.pingInterval) {
         this.pingTimer = setInterval(() => this.ping(), this.pingInterval);
       }
-      this.callback('connect');
+      this.emit('connect');
     };
     this.connection.onclose = () => {
       this.connected = false;
@@ -76,7 +76,7 @@ class WsClient {
         clearInterval(this.pingTimer);
         this.pingTimer = null;
       }
-      if (!this.reconnectTimer) this.callback('disconnect');
+      if (!this.reconnectTimer) this.emit('disconnect');
       if (this.reconnectInterval && !this.shutdown) {
         const connect = () => void this.connect();
         this.reconnectTimer = setTimeout(connect, this.reconnectInterval);
@@ -84,9 +84,9 @@ class WsClient {
       this.shutdown = false;
     };
     this.connection.onmessage = (event) => {
-      this.callback('message', JSON.parse(event.data));
+      this.emit('message', JSON.parse(event.data));
     };
-    this.connection.onerror = (error) => void this.callback('error', error);
+    this.connection.onerror = (error) => void this.emit('error', error);
   }
 
   close() {
@@ -111,7 +111,7 @@ class WsClient {
   }
 }
 
-class HttpCache {
+class RequestCache {
   constructor({ name, assets }) {
     this.name = name;
     this.assets = assets;
@@ -249,14 +249,14 @@ const createConnection = (config) => {
       broadcast(message);
     },
   };
-  const callback = (event, data) => {
+  const listener = (event, data) => {
     if (event in handlers) handlers[event](data);
   };
-  return new WsClient(config, callback);
+  return new WsClient(config, listener);
 };
 
 const main = (config) => {
-  const cache = new HttpCache(config.cache);
+  const reqCache = new RequestCache(config.cache);
   const connection = createConnection(config.client);
 
   // UI interaction
@@ -273,7 +273,7 @@ const main = (config) => {
       console.log('Service Worker: Manual cache update requested');
       const msgType = 'cacheUpdated';
       try {
-        await cache.update();
+        await reqCache.update();
         event.source.postMessage({ type: msgType });
       } catch ({ message: error }) {
         event.source.postMessage({ type: msgType, error });
