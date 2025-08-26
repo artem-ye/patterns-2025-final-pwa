@@ -41,11 +41,9 @@ class App extends PWA {
   }
 
   setupWorkerListeners() {
-    //this.on('online', () => this.updateConnectionStatus());
     this.on('installable', () => this.showInstallButton(true));
     this.on('installed', (installed) => this.showInstallButton(installed));
 
-    // ??? setupEventListeners - this.on('online')
     this.on('status', ({ connected }) => {
       this.updateUI();
       const status = connected ? 'connected' : 'disconnected';

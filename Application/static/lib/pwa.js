@@ -88,18 +88,6 @@ class PWA extends EventEmitter {
 
   #initNetworkStatus() {
     this.#online = navigator.onLine;
-    /*
-    window.addEventListener('online', () => {
-      this.#online = true;
-      this.#worker.postMessage({ type: 'online' });
-      //this.emit('online', true);
-    });
-    window.addEventListener('offline', () => {
-      this.#online = false;
-      this.#worker.postMessage({ type: 'offline' });
-      //this.emit('online', false);
-    });
-    */
     this.on('status', ({ connected }) => {
       this.#online = connected;
     });
@@ -137,15 +125,6 @@ class PWA extends EventEmitter {
   async updateCache() {
     this.logger.log('Requesting cache update...');
     this.#worker.postMessage({ type: 'updateCache' });
-    /*
-    // This try does`nt works
-    try {
-      this.#worker.postMessage({ type: 'updateCache' });
-      this.emit('cacheUpdated');
-    } catch (error) {
-      this.emit('cacheUpdateError', error);
-    }
-    */
   }
 
   get online() {
