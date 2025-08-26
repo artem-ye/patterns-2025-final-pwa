@@ -49,7 +49,7 @@ class Notifications {
     return new Notifications(document.getElementById(elementId), opts);
   }
 
-  showNotification(message, type = 'info') {
+  notify(message, type = 'info') {
     if (!this.element) return;
     this.element.textContent = message;
     this.element.className = `notification ${type}`;
@@ -64,7 +64,7 @@ class Notifications {
     return permission === 'granted';
   }
 
-  static async sendTestNotification() {
+  static async testNotification() {
     const notification = new Notification('PWA Example', {
       body: 'This is a test notification from the PWA!',
       icon: '/icon.svg',
@@ -129,26 +129,26 @@ class App extends PWA {
       const status = connected ? 'connected' : 'disconnected';
       const message = `Service worker ${status}`;
       this.logger.log(message);
-      this.showNotification(message, connected ? 'success' : 'warning');
+      this.notify(message, connected ? 'success' : 'warning');
     });
     this.on('message', ({ content }) => {
-      this.showNotification(`Message: ${content}`, 'info');
+      this.notify(`Message: ${content}`, 'info');
       this.logger.log('Message:', content);
     });
     this.on('error', ({ error }) => {
       this.logger.log('Service worker error:', error);
-      this.showNotification('Service worker error', 'error');
+      this.notify('Service worker error', 'error');
     });
     // TODO: refactor
     this.on('cacheUpdated', () => {
       this.logger.log('Cache updated successfully');
-      this.showNotification('Cache updated successfully!', 'success');
+      this.notify('Cache updated successfully!', 'success');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
     });
     this.on('cacheUpdateFailed', ({ error }) => {
       this.logger.log('Cache update failed:', error);
-      this.showNotification('Cache update failed', 'error');
+      this.notify('Cache update failed', 'error');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
     });
@@ -158,7 +158,7 @@ class App extends PWA {
     const content = this.messageInput?.value?.trim();
     this.messageInput.value = '';
     if (!content) {
-      this.showNotification('Please enter a message', 'warning');
+      this.notify('Please enter a message', 'warning');
       return;
     }
     this.postMessage(content);
@@ -185,9 +185,9 @@ class App extends PWA {
     this.updateConnectionStatus();
   }
 
-  showNotification(message, type = 'info') {
+  notify(message, type = 'info') {
     if (!this.#notifications) return;
-    this.#notifications.showNotification(message, type);
+    this.#notifications.notify(message, type);
   }
 }
 
