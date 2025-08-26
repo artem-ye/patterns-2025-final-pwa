@@ -1,8 +1,6 @@
 import { PWA } from './lib/pwa.js';
 import { Logger, Notifications } from './lib/core.components.js';
 
-const VERSION = '1.1.2';
-
 const config = {
   workerPath: './worker.js',
   pingInterval: 25000,
@@ -109,5 +107,3 @@ const notification = Notifications.fromId('notification', {
 });
 const app = new App({ config, logger, notification });
 app.on('message', (data) => logger.log('Message', data));
-
-console.log(`\n\n\n!!! STARTING ${VERSION} !!!\n\n\n`);
