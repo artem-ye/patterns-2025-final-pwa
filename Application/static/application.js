@@ -2,23 +2,33 @@ import { PWA } from './lib/pwa.js';
 
 const VERSION = '1.1.1';
 
-class Logger {
-  #output;
+const config = {
+  workerPath: './worker.js',
+  pingInterval: 25000,
+  notificationTimeout: 3000,
+};
 
-  constructor(outputId) {
-    this.#output = document.getElementById(outputId);
+class Logger {
+  element = null;
+
+  constructor(element) {
+    this.element = element;
+  }
+
+  static fromId(elementId) {
+    return new Logger(document.getElementById(elementId));
   }
 
   log(...args) {
     const lines = args.map(Logger.#serialize);
     const timestamp = new Date().toISOString();
     const logEntry = `[${timestamp}] ${lines.join(' ')}\n`;
-    this.#output.textContent += logEntry;
-    this.#output.scrollTop = this.#output.scrollHeight;
+    this.element.textContent += logEntry;
+    this.element.scrollTop = this.element.scrollHeight;
   }
 
   clear() {
-    this.#output.textContent = '';
+    this.element.textContent = '';
   }
 
   static #serialize(x) {
@@ -26,21 +36,57 @@ class Logger {
   }
 }
 
-const config = {
-  workerPath: './worker.js',
-  pingInterval: 25000,
-};
+class Notifications {
+  element = null;
+  timeout = 0;
+
+  constructor(element, { timeout }) {
+    this.element = element;
+    this.timeout = timeout ?? 3000;
+  }
+
+  static fromId(elementId, opts) {
+    return new Notifications(document.getElementById(elementId), opts);
+  }
+
+  showNotification(message, type = 'info') {
+    if (!this.element) return;
+    this.element.textContent = message;
+    this.element.className = `notification ${type}`;
+    this.element.classList.remove('hidden');
+    setTimeout(() => {
+      this.element.classList.add('hidden');
+    }, this.timeout);
+  }
+
+  static async requestPermission() {
+    const permission = await Notification.requestPermission();
+    return permission === 'granted';
+  }
+
+  static async sendTestNotification() {
+    const notification = new Notification('PWA Example', {
+      body: 'This is a test notification from the PWA!',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+    });
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
+  }
+}
 
 class App extends PWA {
-  constructor({ config, logger }) {
+  #notifications = null;
+
+  constructor({ config, logger, notification }) {
     super({ config, logger });
     this.getElements();
+    this.setupNotifications(notification);
     this.setupEventListeners();
     this.setupWorkerListeners();
     this.updateUI();
-    setTimeout(() => {
-      this.requestNotificationPermission();
-    }, 2000);
   }
 
   getElements() {
@@ -52,7 +98,13 @@ class App extends PWA {
     this.messageInput = document.getElementById('message-input');
     this.connectionStatus = document.getElementById('connection-status');
     this.installStatus = document.getElementById('install-status');
-    this.notification = document.getElementById('notification');
+  }
+
+  async setupNotifications(instance) {
+    if (!instance) return;
+    this.#notifications = instance;
+    const permission = await Notifications.requestPermission();
+    this.logger.log('Notification permission:', permission);
   }
 
   setupEventListeners() {
@@ -60,9 +112,7 @@ class App extends PWA {
     this.sendMessageBtn.onclick = () => this.sendMessage();
     this.updateCacheBtn.onclick = () => this.updateCache();
     this.clearBtn.onclick = () => this.logger.clear();
-    this.sendBtn.onclick = () => {
-      this.sendMessage();
-    };
+    this.sendBtn.onclick = () => this.sendMessage();
     this.messageInput.addEventListener('keypress', (event) => {
       if (event.key === 'Enter') this.sendMessage();
     });
@@ -135,38 +185,16 @@ class App extends PWA {
     this.updateConnectionStatus();
   }
 
-  // Notifications
-
   showNotification(message, type = 'info') {
-    if (!this.notification) return;
-    this.notification.textContent = message;
-    this.notification.className = `notification ${type}`;
-    this.notification.classList.remove('hidden');
-    setTimeout(() => {
-      this.notification.classList.add('hidden');
-    }, 3000);
-  }
-
-  async requestNotificationPermission() {
-    const permission = await Notification.requestPermission();
-    this.logger.log('Notification permission:', permission);
-    return permission === 'granted';
-  }
-
-  async sendTestNotification() {
-    const notification = new Notification('PWA Example', {
-      body: 'This is a test notification from the PWA!',
-      icon: '/icon.svg',
-      badge: '/icon.svg',
-    });
-    notification.onclick = () => {
-      window.focus();
-      notification.close();
-    };
-    this.logger.log('Test notification sent');
+    if (!this.#notifications) return;
+    this.#notifications.showNotification(message, type);
   }
 }
-const logger = new Logger('output');
-window.application = new App({ config, logger });
+
+const logger = Logger.fromId('output');
+const notification = Notifications.fromId('notification', {
+  timeout: config.notificationTimeout,
+});
+window.application = new App({ config, logger, notification });
 
 console.log(`\n\n\n!!! STARTING ${VERSION} !!!\n\n\n`);
