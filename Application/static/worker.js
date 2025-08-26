@@ -24,7 +24,6 @@ class WsClient {
   onOpen = null;
   onClose = null;
   onMessage = null;
-  onError = null;
 
   constructor(options) {
     const { reconnectInterval } = options;
@@ -55,7 +54,6 @@ class WsClient {
       }
       this.shutdown = false;
     };
-    this.connection.onerror = (error) => void this.onError(error);
     this.connection.onmessage = (event) => {
       this.onMessage(JSON.parse(event.data));
     };
@@ -225,11 +223,6 @@ client.onOpen = () => {
 client.onClose = () => {
   console.log('Service Worker: websocket disconnected');
   broadcast({ type: 'status', connected: false });
-};
-client.onError = (error) => {
-  if (client.reconnecting) return;
-  console.error('Service Worker: websocket error', error);
-  broadcast({ type: 'error', error: error.message });
 };
 client.onMessage = (message) => {
   console.log('Service Worker: websocket message:', message);
