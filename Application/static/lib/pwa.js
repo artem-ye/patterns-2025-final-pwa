@@ -62,6 +62,7 @@ class PWA extends EventEmitter {
   #clientId = null;
   #online = true;
   #installer = null;
+  #ready = null;
 
   constructor({ config, logger, notification, getClientId: clientId }) {
     super();
@@ -70,7 +71,7 @@ class PWA extends EventEmitter {
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#clientId = clientId ? clientId() : getClientId();
 
-    this.#initWorker();
+    this.#ready = this.#initWorker().then(() => true);
     this.#initStatus();
     this.#initInstaller();
   }
@@ -124,6 +125,7 @@ class PWA extends EventEmitter {
   }
 
   async postMessage(data) {
+    await this.#ready;
     this.#worker.postMessage(data);
     this.logger.log('Sent message:', data);
   }
