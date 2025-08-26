@@ -150,10 +150,7 @@ self.addEventListener('fetch', async (event) => {
 const activate = async () => {
   console.log('Service Worker: Activating...');
   try {
-    await Promise.all([
-      cleanupCache(),
-      self.clients.claim(),
-    ]);
+    await Promise.all([cleanupCache(), self.clients.claim()]);
     console.log('Service Worker: Activated successfully');
   } catch (error) {
     console.error('Service Worker: Activation failed:', error);
@@ -191,7 +188,10 @@ const connect = async () => {
     console.log('Service Worker: websocket disconnected');
     broadcast({ type: 'status', connected: false });
     if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(connect, 3000);
+    reconnectTimer = setTimeout(() => {
+      console.log('Service Worker: RECONNECTING....');
+      connect();
+    }, 3000);
   };
 
   websocket.onerror = (error) => {
