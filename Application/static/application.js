@@ -38,18 +38,12 @@ class App extends PWA {
 
   async sendMessage() {
     const content = this.messageInput?.value?.trim();
-    this.messageInput.value = '';
     if (!content) {
       this.notification.showNotification('Please enter a message', 'warning');
       return;
     }
     this.postMessage({ type: 'message', content });
-  }
-
-  updateConnectionStatus() {
-    const status = this.online ? 'online' : 'offline';
-    this.connectionStatus.textContent = status.toUpperCase();
-    this.connectionStatus.className = `status-indicator ${status}`;
+    this.messageInput.value = '';
   }
 
   showInstallButton(visible) {
@@ -62,6 +56,10 @@ class App extends PWA {
     }
   }
 
+  updateCache() {
+    this.postMessage({ type: 'updateCache' });
+  }
+
   showNotification(message, type = 'info') {
     const element = this.notification;
     element.textContent = message;
@@ -69,7 +67,7 @@ class App extends PWA {
     element.classList.remove('hidden');
     setTimeout(() => {
       element.classList.add('hidden');
-    }, this.config.notificationTimeout || 3000);
+    }, this.config.notificationTimeout ?? 3000);
   }
 
   updateUI() {
@@ -77,9 +75,10 @@ class App extends PWA {
     this.updateConnectionStatus();
   }
 
-  async updateCache() {
-    this.logger.log('Requesting cache update...');
-    this.postMessage({ type: 'updateCache' });
+  updateConnectionStatus() {
+    const status = this.online ? 'online' : 'offline';
+    this.connectionStatus.textContent = status.toUpperCase();
+    this.connectionStatus.className = `status-indicator ${status}`;
   }
 }
 
