@@ -1,7 +1,4 @@
-const RECONNECT_INTERVAL = 3000;
-const PING_INTERVAL = 2500;
-const CACHE_NAME = 'v1';
-const CACHE_ASSETS = [
+const ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
@@ -15,23 +12,44 @@ const CACHE_ASSETS = [
   '/404.html',
 ];
 
+const config = {
+  client: {
+    reconnectInterval: 3000,
+    pingInterval: 25000,
+  },
+  cache: {
+    name: 'v1',
+    assets: ASSETS,
+  },
+};
+
+const broadcast = async (packet, exclude = null) => {
+  const clients = await self.clients.matchAll({ includeUncontrolled: true });
+  console.log('Broadcasting to clients:', clients.length, packet);
+  for (const client of clients) {
+    if (client !== exclude) {
+      console.log('Sending to client:', client.id);
+      client.postMessage(packet);
+    }
+  }
+};
+
 class WsClient {
   reconnectInterval = 0;
   pingInterval = 0;
+  callback = null;
   connection = null;
   connected = false;
   connecting = false;
   shutdown = false;
   reconnectTimer = null;
   pingTimer = null;
-  onOpen = null;
-  onClose = null;
-  onMessage = null;
 
-  constructor(options) {
+  constructor(options, callback) {
     const { reconnectInterval, pingInterval } = options;
-    this.reconnectInterval = reconnectInterval || 0;
-    this.pingInterval = pingInterval || 0;
+    this.reconnectInterval = reconnectInterval ?? 0;
+    this.pingInterval = pingInterval ?? 0;
+    this.callback = callback;
   }
 
   async connect() {
@@ -49,7 +67,7 @@ class WsClient {
       if (this.pingInterval) {
         this.pingTimer = setInterval(() => this.ping(), this.pingInterval);
       }
-      this.onOpen();
+      this.callback('connect');
     };
     this.connection.onclose = () => {
       this.connected = false;
@@ -58,7 +76,7 @@ class WsClient {
         clearInterval(this.pingTimer);
         this.pingTimer = null;
       }
-      if (!this.reconnectTimer) this.onClose();
+      if (!this.reconnectTimer) this.callback('disconnect');
       if (!this.shutdown && this.reconnectInterval) {
         const connect = () => void this.connect();
         this.reconnectTimer = setTimeout(connect, this.reconnectInterval);
@@ -66,7 +84,7 @@ class WsClient {
       this.shutdown = false;
     };
     this.connection.onmessage = (event) => {
-      this.onMessage(JSON.parse(event.data));
+      this.callback('message', JSON.parse(event.data));
     };
   }
 
@@ -93,7 +111,7 @@ class WsClient {
 }
 
 class HttpCache {
-  constructor(name, assets) {
+  constructor({ name, assets }) {
     this.name = name;
     this.assets = assets;
     this.#setupListeners();
@@ -148,12 +166,12 @@ class HttpCache {
   }
 
   async #activate() {
-    console.log('Service Worker: Activating...');
+    console.log('Service Worker: Activating cache...');
     try {
       await Promise.all([this.cleanup(), self.clients.claim()]);
-      console.log('Service Worker: Activated successfully');
+      console.log('Service Worker: Cache activated successfully');
     } catch (error) {
-      console.error('Service Worker: Activation failed:', error);
+      console.error('Service Worker: Cache activation failed:', error);
     }
   }
 
@@ -217,65 +235,63 @@ class HttpCache {
   }
 }
 
-const broadcast = async (packet, exclude = null) => {
-  const clients = await self.clients.matchAll({ includeUncontrolled: true });
-  console.log('Broadcasting to clients:', clients.length, packet);
-  for (const client of clients) {
-    if (client !== exclude) {
-      console.log('Sending to client:', client.id);
-      client.postMessage(packet);
-    }
-  }
+const createConnection = (config) => {
+  const handlers = {
+    connect: () => {
+      console.log('Service Worker: this.websocket this.connected');
+      broadcast({ type: 'status', connected: true });
+    },
+    disconnect: () => {
+      console.log('Service Worker: websocket disconnected');
+      broadcast({ type: 'status', connected: false });
+    },
+    message: (message) => {
+      console.log('Service Worker: websocket message:', message);
+      broadcast(message);
+    },
+  };
+  const callback = (event, data) => {
+    if (event in handlers) handlers[event](data);
+  };
+  return new WsClient(config, callback);
 };
 
-const cache = new HttpCache(CACHE_NAME, CACHE_ASSETS);
-const client = new WsClient({
-  reconnectInterval: RECONNECT_INTERVAL,
-  pingInterval: PING_INTERVAL,
-});
+const main = (config) => {
+  const cache = new HttpCache(config.cache);
+  const connection = createConnection(config.client);
 
-client.onOpen = () => {
-  console.log('Service Worker: this.websocket this.connected');
-  broadcast({ type: 'status', connected: true });
-};
-client.onClose = () => {
-  console.log('Service Worker: websocket disconnected');
-  broadcast({ type: 'status', connected: false });
-};
-client.onMessage = (message) => {
-  console.log('Service Worker: websocket message:', message);
-  broadcast(message);
+  // UI interaction
+  const messageHandlers = {
+    online: () => void connection.connect(),
+    offline: () => void connection.close(),
+    ping: () => void connection.send({ type: 'ping' }),
+    message: (event) => {
+      const packet = { type: 'message', content: event.data.content };
+      connection.send(packet);
+      broadcast(packet, event.source);
+    },
+    updateCache: async (event) => {
+      console.log('Service Worker: Manual cache update requested');
+      const msgType = 'cacheUpdated';
+      try {
+        await cache.update();
+        event.source.postMessage({ type: msgType });
+      } catch ({ message: error }) {
+        event.source.postMessage({ type: msgType, error });
+      }
+    },
+  };
+  self.addEventListener('message', (event) => {
+    console.log('Service Worker: received', event.data);
+    const { type } = event.data;
+    const handler = messageHandlers[type];
+    if (handler) handler(event);
+  });
+  self.addEventListener('beforeunload', (event) => {
+    console.log('Service Worker: beforeunload', event);
+  });
+
+  connection.connect();
 };
 
-// Browser interaction
-const messageHandlers = {
-  online: () => client.connect(),
-  offline: () => void client.close(),
-  ping: () => void client.send({ type: 'ping' }),
-  message: (event) => {
-    const packet = { type: 'message', content: event.data.content };
-    client.send(packet);
-    broadcast(packet, event.source);
-  },
-  updateCache: async (event) => {
-    console.log('Service Worker: Manual cache update requested');
-    const msgType = 'cacheUpdated';
-    try {
-      await cache.update();
-      event.source.postMessage({ type: msgType });
-    } catch ({ message: error }) {
-      event.source.postMessage({ type: msgType, error });
-    }
-  },
-};
-self.addEventListener('message', (event) => {
-  console.log('Service Worker: received', event.data);
-  const { type } = event.data;
-  const handler = messageHandlers[type];
-  if (handler) handler(event);
-});
-self.addEventListener('beforeunload', (event) => {
-  console.log('Service Worker: beforeunload', event);
-});
-
-client.connect();
+main(config);
