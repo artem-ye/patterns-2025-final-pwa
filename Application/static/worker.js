@@ -128,7 +128,7 @@ const updateCacheHandler = async (event) => {
     event.source.postMessage({ type: 'cacheUpdated' });
   } catch (error) {
     event.source.postMessage({
-      type: 'cacheUpdateFailed',
+      type: 'cacheUpdated',
       error: error.message,
     });
   }

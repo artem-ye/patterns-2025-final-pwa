@@ -59,18 +59,15 @@ class App extends PWA {
       this.logger.log('Service worker error:', error);
       this.notification.notify('Service worker error', 'error');
     });
-    // TODO: refactor
-    this.on('cacheUpdated', () => {
-      this.logger.log('Cache updated successfully');
-      this.notification.notify('Cache updated successfully!', 'success');
+    this.on('cacheUpdated', ({ error }) => {
+      if (!error) {
+        this.logger.log('Cache updated successfully');
+        this.notification.notify('Cache updated successfully', 'success');
+      } else {
+        this.logger.log('Cache update failed:', error);
+        this.notification.notify('Cache update failed', 'error');
+      }
       this.updateCacheBtn.disabled = false;
-      this.updateCacheBtn.textContent = 'Update Cache';
-    });
-    this.on('cacheUpdateFailed', ({ error }) => {
-      this.logger.log('Cache update failed:', error);
-      this.notification.notify('Cache update failed', 'error');
-      this.updateCacheBtn.disabled = false;
-      this.updateCacheBtn.textContent = 'Update Cache';
     });
   }
 
