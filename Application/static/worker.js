@@ -225,9 +225,8 @@ const messageHandlers = {
     send(packet);
     broadcast(packet, event.source);
   },
-  ping: (event) => {
-    console.log({ event });
-    event.source.postMessage({ type: 'pong' });
+  ping: () => {
+    send({ type: 'ping' });
   },
   updateCache: updateCacheHandler,
 };
