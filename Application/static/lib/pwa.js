@@ -78,15 +78,12 @@ class PWA extends EventEmitter {
     this.#worker = registration.active;
 
     navigator.serviceWorker.addEventListener('message', (event) => {
-      this.logger.log('Worker message', event.data);
+      this.logger.log('Receive Worker message:', event.data);
       this.emit(event.data.type, event.data);
     });
     window.addEventListener('beforeunload', () => {
       this.#worker.postMessage({ type: 'disconnect' });
     });
-    // const ping = () => this.#worker.postMessage({ type: 'ping' });
-    // setInterval(ping, this.config.pingInterval);
-    // document.addEventListener('visibilitychange', ping);
   }
 
   #initStatus() {
@@ -110,20 +107,20 @@ class PWA extends EventEmitter {
 
   async install() {
     if (!this.#installer) {
-      this.logger.log('Install prompt not available');
-      return;
+      const msg = 'Install prompt not available';
+      this.logger.log('Install error:', msg);
     }
     this.#installer.prompt();
     const { outcome } = await this.#installer.userChoice;
-    const message = outcome === 'accepted' ? 'accepted' : 'dismissed';
-    if (message === 'accepted') this.#installer = null;
-    this.logger.log(`Install prompt ${message}`);
+    const result = outcome === 'accepted' ? 'accepted' : 'dismissed';
+    if (result === 'accepted') this.#installer = null;
+    this.logger.log('Install status:', result);
   }
 
   async postMessage(data) {
     await this.#ready;
     this.#worker.postMessage(data);
-    this.logger.log('Sent message:', data);
+    this.logger.log('Post Worker message:', data);
   }
 
   static async requestNotificationsPermissions() {
@@ -132,8 +129,8 @@ class PWA extends EventEmitter {
 
   static notify(body, options = {}) {
     if (Notification.permission !== 'granted') {
-      this.logger.log('Notification not shown. Request permission required');
-      return;
+      const msg = 'Notification not shown. Request permission required';
+      this.logger.log('Notification error:', msg);
     }
     const defaults = {
       title: 'PWA Application',
