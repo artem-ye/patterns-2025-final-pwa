@@ -195,6 +195,7 @@ const logger = Logger.fromId('output');
 const notification = Notifications.fromId('notification', {
   timeout: config.notificationTimeout,
 });
-window.application = new App({ config, logger, notification });
+const app = new App({ config, logger, notification });
+app.on('message', (data) => logger.log('Message', data));
 
 console.log(`\n\n\n!!! STARTING ${VERSION} !!!\n\n\n`);

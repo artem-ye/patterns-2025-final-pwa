@@ -64,7 +64,6 @@ class PWA extends EventEmitter {
     this.#worker = registration.active;
 
     navigator.serviceWorker.addEventListener('message', (event) => {
-      this.logger.log('Message:', event.data);
       this.emit('message', event.data);
     });
     window.addEventListener('beforeunload', () => {
