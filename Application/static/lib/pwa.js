@@ -1,5 +1,14 @@
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
+const getClientId = () => {
+  let clientId = localStorage.getItem('clientId');
+  if (!clientId) {
+    clientId = generateId();
+    localStorage.setItem('clientId', clientId);
+  }
+  return clientId;
+};
+
 class EventEmitter {
   constructor() {
     this.events = {};
@@ -40,6 +49,11 @@ class EventEmitter {
   }
 }
 
+const DEF_CONFIG = {
+  workerPath: './worker.js',
+  pingInterval: 25000,
+};
+
 class PWA extends EventEmitter {
   config = {};
   logger = null;
@@ -49,12 +63,13 @@ class PWA extends EventEmitter {
   #online = true;
   #installer = null;
 
-  constructor({ config, logger, notification }) {
+  constructor({ config, logger, notification, getClientId: clientId }) {
     super();
-    this.config = config;
+    this.config = { ...DEF_CONFIG, ...config };
     this.notification = notification;
     this.logger = logger || { log: () => {}, clear: () => {} };
-    this.#initClientId();
+    this.#clientId = clientId ? clientId() : getClientId();
+
     this.#initWorker();
     this.#initStatus();
     this.#initInstaller();
@@ -75,14 +90,6 @@ class PWA extends EventEmitter {
     const ping = () => this.#worker.postMessage({ type: 'ping' });
     setInterval(ping, this.config.pingInterval);
     document.addEventListener('visibilitychange', ping);
-  }
-
-  #initClientId() {
-    this.#clientId = localStorage.getItem('clientId');
-    if (!this.#clientId) {
-      this.#clientId = generateId();
-      localStorage.setItem('clientId', this.#clientId);
-    }
   }
 
   #initStatus() {
@@ -123,6 +130,10 @@ class PWA extends EventEmitter {
 
   get online() {
     return this.#online;
+  }
+
+  get clientId() {
+    return this.#clientId;
   }
 }
 

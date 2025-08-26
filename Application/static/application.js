@@ -8,8 +8,8 @@ const config = {
 };
 
 class App extends PWA {
-  constructor({ config, logger, notification }) {
-    super({ config, logger, notification });
+  constructor(opts) {
+    super(opts);
     this.getElements();
     this.setupEventListeners();
     this.setupWorkerListeners();
