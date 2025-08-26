@@ -1,9 +1,6 @@
-const CACHE = 'v1';
-const config = {
-  reconnectInterval: 3000,
-};
-
-const ASSETS = [
+const RECONNECT_INTERVAL = 3000;
+const CACHE_NAME = 'v1';
+const CACHE_ASSETS = [
   '/',
   '/index.html',
   '/styles.css',
@@ -17,7 +14,7 @@ const ASSETS = [
   '/404.html',
 ];
 
-class Client {
+class WsClient {
   reconnectInterval = 0;
   connection = null;
   connected = false;
@@ -82,6 +79,131 @@ class Client {
   }
 }
 
+class HttpCache {
+  constructor(name, assets) {
+    this.name = name;
+    this.assets = assets;
+    this.#setupListeners();
+  }
+
+  async update() {
+    const cache = await caches.open(this.name);
+    console.log('Service Worker: Updating cache...');
+    for (const asset of this.assets) {
+      try {
+        await cache.add(asset);
+        console.log('Service Worker: Cached:', asset);
+      } catch (error) {
+        console.error('Service Worker: Failed to cache:', asset, error);
+        throw error;
+      }
+    }
+  }
+
+  async cleanup() {
+    const cacheNames = await caches.keys();
+    const deletePromises = cacheNames
+      .filter((cacheName) => cacheName !== this.name)
+      .map(async (cacheName) => {
+        console.log('Service Worker: Deleting old cache:', cacheName);
+        await caches.delete(cacheName);
+      });
+    await Promise.all(deletePromises);
+  }
+
+  #setupListeners() {
+    self.addEventListener('install', (event) => {
+      event.waitUntil(this.#install());
+    });
+    self.addEventListener('activate', (event) => {
+      event.waitUntil(this.#activate());
+    });
+    self.addEventListener('fetch', (event) => {
+      this.#serve(event);
+    });
+  }
+
+  async #install() {
+    console.log('Service Worker: Installing cache...');
+    try {
+      await this.update();
+      console.log('Service Worker: All assets cached successfully');
+      await self.skipWaiting();
+    } catch (error) {
+      console.error('Service Worker: Failed to cache assets:', error);
+    }
+  }
+
+  async #activate() {
+    console.log('Service Worker: Activating...');
+    try {
+      await Promise.all([this.cleanup(), self.clients.claim()]);
+      console.log('Service Worker: Activated successfully');
+    } catch (error) {
+      console.error('Service Worker: Activation failed:', error);
+    }
+  }
+
+  async #serve(event) {
+    const { request } = event;
+    if (request.method !== 'GET') return;
+    if (!request.url.startsWith('http')) return;
+    const respond = async () => {
+      try {
+        const cachedResponse = await this.#serveFromCache(request);
+        if (cachedResponse) return cachedResponse;
+        return await this.#fetchFromNetwork(request);
+      } catch {
+        return await this.#offlineFallback(request);
+      }
+    };
+    event.respondWith(respond());
+  }
+
+  async #serveFromCache(request) {
+    const cache = await caches.open(this.name);
+    const cachedResponse = await cache.match(request);
+    if (cachedResponse) {
+      console.log('Service Worker: Serving from cache:', request.url);
+      return cachedResponse;
+    }
+    return null;
+  }
+
+  async #fetchFromNetwork(request) {
+    console.log('Service Worker: Fetching from network:', request.url);
+    const networkResponse = await fetch(request);
+    if (networkResponse.status === 200) {
+      console.log('Service Worker: Caching response:', request.url);
+      const cache = await caches.open(this.name);
+      await cache.put(request, networkResponse.clone());
+    }
+    return networkResponse;
+  }
+
+  async #offlineFallback(request) {
+    console.log('Service Worker: Network failed, checking cache:', request.url);
+    const cachedResponse = await this.#serveFromCache(request);
+    if (cachedResponse) {
+      console.log('Service Worker: Serving from cache (offline):', request.url);
+      return cachedResponse;
+    }
+    console.log('Service Worker: No cache available for:', request.url);
+    if (request.mode === 'navigate') {
+      const cache = await caches.open(this.name);
+      const fallbackResponse = await cache.match('/index.html');
+      if (fallbackResponse) {
+        return fallbackResponse;
+      }
+    }
+    return new Response('Offline - Content not available', {
+      status: 503,
+      statusText: 'Service Unavailable',
+      headers: { 'Content-Type': 'text/plain' },
+    });
+  }
+}
+
 const broadcast = async (packet, exclude = null) => {
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
   console.log('Broadcasting to clients:', clients.length, packet);
@@ -93,134 +215,9 @@ const broadcast = async (packet, exclude = null) => {
   }
 };
 
-const updateCache = async () => {
-  const cache = await caches.open(CACHE);
-  console.log('Service Worker: Updating cache...');
-  for (const asset of ASSETS) {
-    try {
-      await cache.add(asset);
-      console.log('Service Worker: Cached:', asset);
-    } catch (error) {
-      console.error('Service Worker: Failed to cache:', asset, error);
-      throw error;
-    }
-  }
-};
+const cache = new HttpCache(CACHE_NAME, CACHE_ASSETS);
+const client = new WsClient({ reconnectInterval: RECONNECT_INTERVAL });
 
-const install = async () => {
-  console.log('Service Worker: Installing...');
-  try {
-    await updateCache();
-    console.log('Service Worker: All assets cached successfully');
-    await self.skipWaiting();
-  } catch (error) {
-    console.error('Service Worker: Failed to cache assets:', error);
-  }
-};
-
-self.addEventListener('install', (event) => {
-  event.waitUntil(install());
-});
-
-const serveFromCache = async (request) => {
-  const cache = await caches.open(CACHE);
-  const cachedResponse = await cache.match(request);
-  if (cachedResponse) {
-    console.log('Service Worker: Serving from cache:', request.url);
-    return cachedResponse;
-  }
-  return null;
-};
-
-const fetchFromNetwork = async (request) => {
-  console.log('Service Worker: Fetching from network:', request.url);
-  const networkResponse = await fetch(request);
-  if (networkResponse.status === 200) {
-    console.log('Service Worker: Caching response:', request.url);
-    const cache = await caches.open(CACHE);
-    await cache.put(request, networkResponse.clone());
-  }
-  return networkResponse;
-};
-
-const offlineFallback = async (request) => {
-  console.log('Service Worker: Network failed, checking cache:', request.url);
-  const cachedResponse = await serveFromCache(request);
-  if (cachedResponse) {
-    console.log('Service Worker: Serving from cache (offline):', request.url);
-    return cachedResponse;
-  }
-  console.log('Service Worker: No cache available for:', request.url);
-  if (request.mode === 'navigate') {
-    const cache = await caches.open(CACHE);
-    const fallbackResponse = await cache.match('/index.html');
-    if (fallbackResponse) {
-      return fallbackResponse;
-    }
-  }
-  return new Response('Offline - Content not available', {
-    status: 503,
-    statusText: 'Service Unavailable',
-    headers: { 'Content-Type': 'text/plain' },
-  });
-};
-
-const cleanupCache = async () => {
-  const cacheNames = await caches.keys();
-  const deletePromises = cacheNames
-    .filter((cacheName) => cacheName !== CACHE)
-    .map(async (cacheName) => {
-      console.log('Service Worker: Deleting old cache:', cacheName);
-      await caches.delete(cacheName);
-    });
-  await Promise.all(deletePromises);
-};
-
-const updateCacheHandler = async (event) => {
-  console.log('Service Worker: Manual cache update requested');
-  try {
-    await updateCache();
-    event.source.postMessage({ type: 'cacheUpdated' });
-  } catch (error) {
-    event.source.postMessage({
-      type: 'cacheUpdated',
-      error: error.message,
-    });
-  }
-};
-
-self.addEventListener('fetch', async (event) => {
-  const { request } = event;
-  if (request.method !== 'GET') return;
-  if (!request.url.startsWith('http')) return;
-  const respond = async () => {
-    try {
-      const cachedResponse = await serveFromCache(request);
-      if (cachedResponse) return cachedResponse;
-      return await fetchFromNetwork(request);
-    } catch {
-      return await offlineFallback(request);
-    }
-  };
-  event.respondWith(respond());
-});
-
-const activate = async () => {
-  console.log('Service Worker: Activating...');
-  try {
-    await Promise.all([cleanupCache(), self.clients.claim()]);
-    console.log('Service Worker: Activated successfully');
-  } catch (error) {
-    console.error('Service Worker: Activation failed:', error);
-  }
-};
-
-self.addEventListener('activate', (event) => {
-  console.log('Service Worker: Activating...');
-  event.waitUntil(activate());
-});
-
-const client = new Client(config);
 client.onOpen = () => {
   console.log('Service Worker: this.websocket this.connected');
   broadcast({ type: 'status', connected: true });
@@ -239,6 +236,7 @@ client.onMessage = (message) => {
   broadcast(message);
 };
 
+// Browser interaction
 const messageHandlers = {
   online: () => client.connect(),
   offline: () => void client.close(),
@@ -248,7 +246,16 @@ const messageHandlers = {
     client.send(packet);
     broadcast(packet, event.source);
   },
-  updateCache: updateCacheHandler,
+  updateCache: async (event) => {
+    console.log('Service Worker: Manual cache update requested');
+    const msgType = 'cacheUpdated';
+    try {
+      await cache.update();
+      event.source.postMessage({ type: msgType });
+    } catch ({ message: error }) {
+      event.source.postMessage({ type: msgType, error });
+    }
+  },
 };
 self.addEventListener('message', (event) => {
   console.log('Service Worker: received', event.data);
