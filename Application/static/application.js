@@ -2,8 +2,7 @@ import { PWA } from './lib/pwa.js';
 import { Logger } from './lib/logger.js';
 
 const config = {
-  workerPath: './worker.js',
-  pingInterval: 25000,
+  pingInterval: 2500,
   notificationTimeout: 3000,
 };
 
