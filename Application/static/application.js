@@ -116,13 +116,13 @@ class App extends PWA {
     this.messageInput.addEventListener('keypress', (event) => {
       if (event.key === 'Enter') this.sendMessage();
     });
-
-    //this.on('online', () => this.updateConnectionStatus());
-    this.on('installable', () => this.showInstallButton(true));
-    this.on('installed', (installed) => this.showInstallButton(installed));
   }
 
   setupWorkerListeners() {
+    //this.on('online', () => this.updateConnectionStatus());
+    this.on('installable', () => this.showInstallButton(true));
+    this.on('installed', (installed) => this.showInstallButton(installed));
+
     // ??? setupEventListeners - this.on('online')
     this.on('status', ({ connected }) => {
       this.updateUI();
