@@ -5,7 +5,7 @@ class Logger {
     this.element = element;
   }
 
-  static fromId(elementId) {
+  static createById(elementId) {
     return new Logger(document.getElementById(elementId));
   }
 

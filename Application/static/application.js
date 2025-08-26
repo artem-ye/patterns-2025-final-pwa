@@ -83,7 +83,7 @@ class App extends PWA {
   }
 }
 
-const logger = Logger.fromId('output');
+const logger = Logger.createById('output');
 const app = new App({ config, logger });
 
 app.on('error', ({ error }) => {
