@@ -1,6 +1,6 @@
 import { PWA } from './pwa.js';
 
-const VERSION = '1.1.0';
+const VERSION = '1.1.1';
 
 class Logger {
   #output;
@@ -27,8 +27,8 @@ class Logger {
 }
 
 class App extends PWA {
-  constructor({ logger, worker }) {
-    super({ logger, worker });
+  constructor({ logger }) {
+    super({ logger });
     this.getElements();
     this.setupEventListeners();
     this.setupWorkerListeners();
@@ -161,12 +161,7 @@ class App extends PWA {
     this.logger.log('Test notification sent');
   }
 }
-
-navigator.serviceWorker.register('./worker.js');
-navigator.serviceWorker.ready.then((registration) => {
-  const logger = new Logger('output');
-  const worker = registration.active;
-  window.application = new App({ logger, worker });
-});
+const logger = new Logger('output');
+window.application = new App({ logger });
 
 console.log(`\n\n\n!!! STARTING ${VERSION} !!!\n\n\n`);
