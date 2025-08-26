@@ -6,7 +6,7 @@ const path = require('node:path');
 const { WebSocketServer } = require('ws');
 const { randomUUID } = require('node:crypto');
 
-const PORT = 8000;
+const PORT = 8080;
 
 const MIME_TYPES = {
   default: 'application/octet-stream',

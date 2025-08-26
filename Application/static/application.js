@@ -24,33 +24,162 @@ class Logger {
 
 const generateId = () => Math.random().toString(36).substr(2, 9);
 
-class Application {
-  constructor(worker) {
-    this.logger = new Logger('output');
-    this.prompt = null;
-    this.online = navigator.onLine;
-    this.worker = worker;
-    this.init();
+class EventEmitter {
+  constructor() {
+    this.events = {};
   }
 
-  init() {
-    this.worker.postMessage({ type: 'connect' });
+  on(eventName, listener) {
+    let listeners = this.events[eventName];
+    if (!listeners) {
+      listeners = [];
+      this.events[eventName] = listeners;
+    }
+    listeners.push(listener);
+    return this;
+  }
+
+  off(eventName, listener) {
+    const listeners = this.events[eventName];
+    if (!listeners) return this;
+    if (listener) {
+      this.events[eventName] = listeners.filter((l) => l !== listener);
+    } else {
+      delete this.events[eventName];
+    }
+    return this;
+  }
+
+  emit(eventName, ...args) {
+    const listeners = this.events[eventName] || [];
+    if (!listeners) return false;
+    for (const listener of listeners) {
+      try {
+        listener.apply(this, args);
+      } catch (error) {
+        console.error(`Error in event listener for ${eventName}:`, error);
+      }
+    }
+    return true;
+  }
+}
+
+class PWA extends EventEmitter {
+  logger = null;
+  #worker = null;
+  #clientId = null;
+  #online = true;
+  #installer = null;
+
+  constructor({ logger, worker }) {
+    super();
+    this.logger = logger || { log: () => {}, clear: () => {} };
+    this.#initClientId();
+    this.#initWorker(worker);
+    this.#initNetworkStatus();
+    this.#initInstaller();
+  }
+
+  #initWorker(worker) {
+    //const registration =
+    // await navigator.serviceWorker.register('./worker.js');
+    //this.#worker = registration.active;
+    this.#worker = worker;
+
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      this.logger.log('Message:', event.data);
+      this.emit(event.data.type, event.data);
+    });
+    window.addEventListener('beforeunload', () => {
+      this.#worker.postMessage({ type: 'disconnect' });
+    });
+
+    this.#worker.postMessage({ type: 'connect' });
+    const ping = () => this.#worker.postMessage({ type: 'ping' });
+    setInterval(ping, 25000);
+    document.addEventListener('visibilitychange', ping);
+  }
+
+  #initClientId() {
+    this.#clientId = localStorage.getItem('clientId');
+    if (!this.#clientId) {
+      this.#clientId = generateId();
+      localStorage.setItem('clientId', this.#clientId);
+    }
+  }
+
+  #initNetworkStatus() {
+    this.#online = navigator.onLine;
+    window.addEventListener('online', () => {
+      this.#online = true;
+      this.#worker.postMessage({ type: 'online' });
+      //this.emit('online', true);
+    });
+    window.addEventListener('offline', () => {
+      this.#online = false;
+      this.#worker.postMessage({ type: 'offline' });
+      //this.emit('online', false);
+    });
+    this.on('status', ({ connected }) => {
+      this.#online = connected;
+    });
+  }
+
+  #initInstaller() {
+    window.addEventListener('beforeinstallprompt', (event) => {
+      event.preventDefault();
+      this.#installer = event;
+      this.emit('installable');
+    });
+    window.addEventListener('appinstalled', () => {
+      const installed = this.#installer === null;
+      this.emit('installed', installed);
+    });
+  }
+
+  async install() {
+    if (!this.#installer) {
+      this.logger.log('Install prompt not available');
+      return;
+    }
+    this.#installer.prompt();
+    const { outcome } = await this.#installer.userChoice;
+    const message = outcome === 'accepted' ? 'accepted' : 'dismissed';
+    if (message === 'accepted') this.#installer = null;
+    this.logger.log(`Install prompt ${message}`);
+  }
+
+  async postMessage(content) {
+    this.#worker.postMessage({ type: 'message', content });
+    this.logger.log('Sent message:', content);
+  }
+
+  async updateCache() {
+    this.logger.log('Requesting cache update...');
+    // This try does`nt works
+    try {
+      this.#worker.postMessage({ type: 'updateCache' });
+      this.emit('cacheUpdated');
+    } catch (error) {
+      this.emit('cacheUpdateError', error);
+    }
+  }
+
+  get online() {
+    return this.#online;
+  }
+}
+
+class App extends PWA {
+  constructor({ logger, worker }) {
+    super({ logger, worker });
     this.getElements();
     this.setupEventListeners();
-    this.setupNetworkStatus();
-    this.setupInstallPrompt();
+    this.setupWorkerListeners();
     this.updateUI();
     setTimeout(() => {
       this.requestNotificationPermission();
     }, 2000);
-    this.clientId = localStorage.getItem('clientId');
-    if (!this.clientId) {
-      this.clientId = generateId();
-      localStorage.setItem('clientId', this.clientId);
-    }
-    const ping = () => this.worker.postMessage({ type: 'ping' });
-    setInterval(ping, 25000);
-    document.addEventListener('visibilitychange', ping);
   }
 
   getElements() {
@@ -70,79 +199,48 @@ class Application {
     this.sendMessageBtn.onclick = () => this.sendMessage();
     this.updateCacheBtn.onclick = () => this.updateCache();
     this.clearBtn.onclick = () => this.logger.clear();
-    this.sendBtn.onclick = () => this.sendMessage();
+    this.sendBtn.onclick = () => {
+      this.sendMessage();
+    };
     this.messageInput.addEventListener('keypress', (event) => {
       if (event.key === 'Enter') this.sendMessage();
     });
-    navigator.serviceWorker.addEventListener('message', (event) => {
-      this.logger.log('Message:', event.data);
-      this.onWorkerMessage(event.data);
-    });
-    window.addEventListener('beforeunload', () => {
-      this.worker.postMessage({ type: 'disconnect' });
-    });
+
+    //this.on('online', () => this.updateConnectionStatus());
+    this.on('installable', () => this.showInstallButton(true));
+    this.on('installed', (installed) => this.showInstallButton(installed));
   }
 
-  setupNetworkStatus() {
-    window.addEventListener('online', () => {
-      this.online = true;
-      this.worker.postMessage({ type: 'online' });
-      this.updateConnectionStatus();
-      this.logger.log('Network: Online');
-    });
-    window.addEventListener('offline', () => {
-      this.online = false;
-      this.worker.postMessage({ type: 'offline' });
-      this.updateConnectionStatus();
-      this.logger.log('Network: Offline');
-    });
-  }
-
-  setupInstallPrompt() {
-    window.addEventListener('beforeinstallprompt', (event) => {
-      event.preventDefault();
-      this.prompt = event;
-      this.showInstallButton();
-      this.logger.log('Install prompt available');
-    });
-    window.addEventListener('appinstalled', () => {
-      this.hideInstallButton();
-      this.logger.log('App installed successfully');
-      this.showNotification('App installed successfully!', 'success');
-    });
-  }
-
-  onWorkerMessage(message) {
-    if (message.type === 'status') {
+  setupWorkerListeners() {
+    // ??? setupEventListeners - this.on('online')
+    this.on('status', ({ connected }) => {
       this.updateUI();
-      if (message.connected) {
-        this.logger.log('Service worker connected');
-        this.showNotification('Service worker connected', 'success');
-      } else {
-        this.logger.log('Service worker disconnected');
-        this.showNotification('Service worker disconnected', 'warning');
-      }
-    }
-    if (message.type === 'message') {
-      this.showNotification(`Message: ${message.content}`, 'info');
-      this.logger.log('Message:', message.content);
-    }
-    if (message.type === 'error') {
-      this.logger.log('Service worker error:', message.error);
+      const status = connected ? 'connected' : 'disconnected';
+      const message = `Service worker ${status}`;
+      this.logger.log(message);
+      this.showNotification(message, connected ? 'success' : 'warning');
+    });
+    this.on('message', ({ content }) => {
+      this.showNotification(`Message: ${content}`, 'info');
+      this.logger.log('Message:', content);
+    });
+    this.on('error', ({ error }) => {
+      this.logger.log('Service worker error:', error);
       this.showNotification('Service worker error', 'error');
-    }
-    if (message.type === 'cacheUpdated') {
+    });
+    // TODO: refactor
+    this.on('cacheUpdated', () => {
       this.logger.log('Cache updated successfully');
       this.showNotification('Cache updated successfully!', 'success');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
-    }
-    if (message.type === 'cacheUpdateFailed') {
-      this.logger.log('Cache update failed:', message.error);
+    });
+    this.on('cacheUpdateFailed', ({ error }) => {
+      this.logger.log('Cache update failed:', error);
       this.showNotification('Cache update failed', 'error');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
-    }
+    });
   }
 
   async sendMessage() {
@@ -152,46 +250,7 @@ class Application {
       this.showNotification('Please enter a message', 'warning');
       return;
     }
-    this.worker.postMessage({ type: 'message', content });
-    this.logger.log('Sent message:', content);
-  }
-
-  async install() {
-    if (!this.prompt) {
-      this.logger.log('Install prompt not available');
-      return;
-    }
-    this.prompt.prompt();
-    const { outcome } = await this.prompt.userChoice;
-    const message = outcome === 'accepted' ? 'accepted' : 'dismissed';
-    this.logger.log(`Install prompt ${message}`);
-    this.prompt = null;
-    this.hideInstallButton();
-  }
-
-  async updateCache() {
-    this.logger.log('Requesting cache update...');
-    this.updateCacheBtn.disabled = true;
-    this.updateCacheBtn.textContent = 'Updating...';
-    try {
-      this.worker.postMessage({ type: 'updateCache' });
-      this.showNotification('Cache update requested', 'info');
-    } catch (error) {
-      this.logger.log('Failed to request cache update:', error);
-      this.showNotification('Failed to update cache', 'error');
-      this.updateCacheBtn.disabled = false;
-      this.updateCacheBtn.textContent = 'Update Cache';
-    }
-  }
-
-  showInstallButton() {
-    this.installBtn.classList.remove('hidden');
-    this.installStatus.classList.remove('hidden');
-  }
-
-  hideInstallButton() {
-    this.installBtn.classList.add('hidden');
-    this.installStatus.classList.add('hidden');
+    this.postMessage(content);
   }
 
   updateConnectionStatus() {
@@ -200,10 +259,22 @@ class Application {
     this.connectionStatus.className = `status-indicator ${status}`;
   }
 
+  showInstallButton(visible) {
+    if (visible) {
+      this.installBtn.classList.remove('hidden');
+      this.installStatus.classList.remove('hidden');
+    } else {
+      this.installBtn.classList.add('hidden');
+      this.installStatus.classList.add('hidden');
+    }
+  }
+
   updateUI() {
     this.sendMessageBtn.disabled = !this.online;
     this.updateConnectionStatus();
   }
+
+  // Notifications
 
   showNotification(message, type = 'info') {
     if (!this.notification) return;
@@ -235,10 +306,11 @@ class Application {
   }
 }
 
-window.Application = Application;
-
 navigator.serviceWorker.register('./worker.js');
-
 navigator.serviceWorker.ready.then((registration) => {
-  window.application = new Application(registration.active);
+  const logger = new Logger('output');
+  const worker = registration.active;
+  window.application = new App({ logger, worker });
 });
+
+console.log('\n\n\n!!! STARTING v1 !!!\n\n\n');
