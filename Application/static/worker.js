@@ -1,4 +1,5 @@
 const CACHE = 'v1';
+const RECONNECT_INTERVAL = 3000;
 
 const ASSETS = [
   '/',
@@ -175,6 +176,10 @@ const connect = async () => {
   websocket.onopen = () => {
     connected = true;
     connecting = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
     console.log('Service Worker: websocket connected');
     broadcast({ type: 'status', connected: true });
   };
@@ -187,18 +192,26 @@ const connect = async () => {
 
   websocket.onclose = () => {
     connected = false;
-    console.log('Service Worker: websocket disconnected');
-    broadcast({ type: 'status', connected: false });
-    if (reconnectTimer) clearTimeout(reconnectTimer);
-    reconnectTimer = setTimeout(() => {
-      console.log('Service Worker: RECONNECTING....');
+    connecting = false;
+
+    if (!reconnectTimer) {
+      console.log('Service Worker: websocket disconnected');
+      broadcast({ type: 'status', connected: false });
+    } else {
+      clearTimeout(reconnectTimer);
+    }
+
+    reconnectTimer = setInterval(() => {
+      console.log('Service Worker: Reconnecting...');
       connect();
-    }, 3000);
+    }, RECONNECT_INTERVAL);
   };
 
   websocket.onerror = (error) => {
-    console.error('Service Worker: websocket error', error);
-    broadcast({ type: 'error', error: error.message });
+    if (!reconnectTimer) {
+      console.error('Service Worker: websocket error', error);
+      broadcast({ type: 'error', error: error.message });
+    }
   };
 };
 
