@@ -46,6 +46,7 @@ const updateCache = async () => {
       console.log('Service Worker: Cached:', asset);
     } catch (error) {
       console.error('Service Worker: Failed to cache:', asset, error);
+      throw error;
     }
   }
 };

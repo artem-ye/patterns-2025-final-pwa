@@ -1,7 +1,7 @@
 import { PWA } from './lib/pwa.js';
 import { Logger, Notifications } from './lib/core.components.js';
 
-const VERSION = '1.1.1';
+const VERSION = '1.1.2';
 
 const config = {
   workerPath: './worker.js',
