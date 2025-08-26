@@ -72,7 +72,6 @@ class PWA extends EventEmitter {
       this.#worker.postMessage({ type: 'disconnect' });
     });
 
-    this.#worker.postMessage({ type: 'connect' });
     const ping = () => this.#worker.postMessage({ type: 'ping' });
     setInterval(ping, this.config.pingInterval);
     document.addEventListener('visibilitychange', ping);
