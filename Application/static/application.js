@@ -1,73 +1,61 @@
 import { PWA } from './lib/pwa.js';
-import { Logger } from './lib/logger.js';
+import * as controls from './controls/index.js';
+const { Button, Input, Logger, Notification, ConnectionStatus } = controls;
 
 const config = {
+  workerPath: './worker.js',
   notificationTimeout: 3000,
 };
 
 class App extends PWA {
-  constructor(opts) {
-    super(opts);
+  constructor(config) {
+    super(config);
     this.getElements();
     this.setupEventListeners();
     this.updateUI();
   }
 
   getElements() {
-    this.installBtn = document.getElementById('install-btn');
-    this.sendMessageBtn = document.getElementById('send-message-btn');
-    this.updateCacheBtn = document.getElementById('update-cache-btn');
-    this.clearBtn = document.getElementById('clear-btn');
-    this.sendBtn = document.getElementById('send-btn');
-    this.messageInput = document.getElementById('message-input');
-    this.connectionStatus = document.getElementById('connection-status');
-    this.installStatus = document.getElementById('install-status');
-    this.notification = document.getElementById('notification');
+    this.installBtn = Button.createById('install-btn');
+    this.sendMessageBtn = Button.createById('send-message-btn');
+    this.updateCacheBtn = Button.createById('update-cache-btn');
+    this.clearBtn = Button.createById('clear-btn');
+    this.sendBtn = Button.createById('send-btn');
+    this.messageInput = Input.createById('message-input');
+    this.installStatus = Button.createById('install-status');
+    this.connectionStatus = ConnectionStatus.createById('connection-status');
+    this.notification = Notification.createById('notification', {
+      timeout: this.config.notificationTimeout,
+    });
   }
 
   setupEventListeners() {
-    this.installBtn.onclick = () => this.install();
-    this.sendMessageBtn.onclick = () => this.sendMessage();
-    this.updateCacheBtn.onclick = () => this.updateCache();
-    this.clearBtn.onclick = () => this.logger.clear();
-    this.sendBtn.onclick = () => this.sendMessage();
-    this.messageInput.addEventListener('keypress', (event) => {
+    this.installBtn.on('click', () => this.install());
+    this.sendMessageBtn.on('click', () => this.sendMessage());
+    this.updateCacheBtn.on('click', () => this.updateCache());
+    this.clearBtn.on('click', () => this.logger.clear());
+    this.sendBtn.on('click', () => this.sendMessage());
+    this.messageInput.on('keypress', (event) => {
       if (event.key === 'Enter') this.sendMessage();
     });
   }
 
   async sendMessage() {
-    const content = this.messageInput?.value?.trim();
+    const content = this.messageInput.value;
     if (!content) {
-      this.showNotification('Please enter a message', 'warning');
-      return;
+      return void this.showNotification('Please enter a message', 'warning');
     }
     this.postMessage({ type: 'message', content });
-    this.messageInput.value = '';
+    this.messageInput.clear();
   }
 
   showInstallButton(visible) {
-    if (visible) {
-      this.installBtn.classList.remove('hidden');
-      this.installStatus.classList.remove('hidden');
-    } else {
-      this.installBtn.classList.add('hidden');
-      this.installStatus.classList.add('hidden');
-    }
+    this.installBtn.visible = visible;
+    this.installStatus.visible = visible;
   }
 
-  updateCache() {
-    this.postMessage({ type: 'updateCache' });
-  }
-
-  showNotification(message, type = 'info') {
-    const element = this.notification;
-    element.textContent = message;
-    element.className = `notification ${type}`;
-    element.classList.remove('hidden');
-    setTimeout(() => {
-      element.classList.add('hidden');
-    }, this.config.notificationTimeout ?? 3000);
+  showNotification(message, type) {
+    this.notification.notify(message, type);
   }
 
   updateUI() {
@@ -76,9 +64,16 @@ class App extends PWA {
   }
 
   updateConnectionStatus() {
-    const status = this.online ? 'online' : 'offline';
-    this.connectionStatus.textContent = status.toUpperCase();
-    this.connectionStatus.className = `status-indicator ${status}`;
+    this.connectionStatus.setState(this.online);
+  }
+
+  updateCache() {
+    this.updateCacheBtn.disabled = true;
+    this.postMessage({ type: 'updateCache' });
+  }
+
+  cacheUpdated() {
+    this.updateCacheBtn.disabled = false;
   }
 }
 
@@ -106,7 +101,7 @@ app.on('cacheUpdated', ({ error }) => {
     logger.log('Cache update failed:', error);
     app.showNotification('Cache update failed', 'error');
   }
-  app.updateCacheBtn.disabled = false;
+  app.cacheUpdated(error);
 });
 app.on('message', ({ content }) => {
   logger.log('Message:', content);

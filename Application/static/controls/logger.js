@@ -1,14 +1,6 @@
-class Logger {
-  element = null;
+import { AbstractControl } from '../lib/abstract.control.js';
 
-  constructor(element) {
-    this.element = element;
-  }
-
-  static createById(elementId) {
-    return new Logger(document.getElementById(elementId));
-  }
-
+class Logger extends AbstractControl {
   log(...args) {
     const lines = args.map(Logger.#serialize);
     const timestamp = new Date().toISOString();
