@@ -39,7 +39,7 @@ class App extends PWA {
   async sendMessage() {
     const content = this.messageInput?.value?.trim();
     if (!content) {
-      this.notification.showNotification('Please enter a message', 'warning');
+      this.showNotification('Please enter a message', 'warning');
       return;
     }
     this.postMessage({ type: 'message', content });
