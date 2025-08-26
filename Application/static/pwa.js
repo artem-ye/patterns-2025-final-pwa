@@ -51,24 +51,16 @@ class PWA extends EventEmitter {
     super();
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#initClientId();
-    this.#registerWorker().then(() => {
-      this.#initWorker();
-      this.#initNetworkStatus();
-      this.#initInstaller();
-    });
+    this.#initWorker();
+    this.#initNetworkStatus();
+    this.#initInstaller();
   }
 
-  #registerWorker() {
-    const { promise, resolve } = Promise.withResolvers();
+  async #initWorker() {
     navigator.serviceWorker.register('./worker.js');
-    navigator.serviceWorker.ready.then((registration) => {
-      this.#worker = registration.active;
-      resolve();
-    });
-    return promise;
-  }
+    const registration = await navigator.serviceWorker.ready;
+    this.#worker = registration.active;
 
-  #initWorker() {
     navigator.serviceWorker.addEventListener('message', (event) => {
       this.logger.log('Message:', event.data);
       this.emit(event.data.type, event.data);
