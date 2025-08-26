@@ -116,9 +116,9 @@ class PWA extends EventEmitter {
     this.logger.log(`Install prompt ${message}`);
   }
 
-  async postMessage(content) {
-    this.#worker.postMessage({ type: 'message', content });
-    this.logger.log('Sent message:', content);
+  async postMessage(data) {
+    this.#worker.postMessage(data);
+    this.logger.log('Sent message:', data);
   }
 
   async updateCache() {

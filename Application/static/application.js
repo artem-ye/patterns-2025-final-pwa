@@ -76,7 +76,7 @@ class App extends PWA {
       this.notification.notify('Please enter a message', 'warning');
       return;
     }
-    this.postMessage(content);
+    this.postMessage({ type: 'message', content });
   }
 
   updateConnectionStatus() {
