@@ -228,7 +228,7 @@ const messageHandlers = {
   ping: () => {
     send({ type: 'ping' });
   },
-  updateCache: updateCache,
+  updateCache: updateCacheHandler,
 };
 
 self.addEventListener('message', (event) => {
