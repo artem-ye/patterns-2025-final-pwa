@@ -99,6 +99,11 @@ class App extends PWA {
     this.sendMessageBtn.disabled = !this.online;
     this.updateConnectionStatus();
   }
+
+  async updateCache() {
+    this.logger.log('Requesting cache update...');
+    this.postMessage({ type: 'updateCache' });
+  }
 }
 
 const logger = Logger.fromId('output');

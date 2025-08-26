@@ -121,11 +121,6 @@ class PWA extends EventEmitter {
     this.logger.log('Sent message:', data);
   }
 
-  async updateCache() {
-    this.logger.log('Requesting cache update...');
-    this.#worker.postMessage({ type: 'updateCache' });
-  }
-
   get online() {
     return this.#online;
   }
