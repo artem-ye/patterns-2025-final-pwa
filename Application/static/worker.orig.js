@@ -1,7 +1,5 @@
 const CACHE = 'v1';
-const config = {
-  reconnectInterval: 3000,
-};
+const RECONNECT_INTERVAL = 3000;
 
 const ASSETS = [
   '/',
@@ -17,72 +15,19 @@ const ASSETS = [
   '/404.html',
 ];
 
-class Client {
-  reconnectInterval = 0;
-  connection = null;
-  connected = false;
-  connecting = false;
-  shutdown = false;
-  reconnectTimer = null;
-  onOpen = null;
-  onClose = null;
-  onMessage = null;
-  onError = null;
+let websocket = null;
+let connected = false;
+let connecting = false;
+let reconnectTimer = null;
 
-  constructor(options) {
-    const { reconnectInterval } = options;
-    this.reconnectInterval = reconnectInterval || 0;
-  }
-
-  async connect() {
-    if (this.connected || this.connecting || this.shutdown) return;
-    this.connecting = true;
-
-    const protocol = self.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const url = `${protocol}//${self.location.host}`;
-    this.connection = new WebSocket(url);
-
-    this.connection.onopen = () => {
-      this.connected = true;
-      this.connecting = false;
-      if (this.reconnectTimer) this.reconnectTimer = null;
-      this.onOpen();
-    };
-    this.connection.onclose = () => {
-      this.connected = false;
-      this.connecting = false;
-      if (!this.reconnectTimer) this.onClose();
-      if (!this.shutdown && this.reconnectInterval) {
-        const connect = () => void this.connect();
-        this.reconnectTimer = setTimeout(connect, this.reconnectInterval);
-      }
-      this.shutdown = false;
-    };
-    this.connection.onerror = (error) => void this.onError(error);
-    this.connection.onmessage = (event) => {
-      this.onMessage(JSON.parse(event.data));
-    };
-  }
-
-  close() {
-    if (this.shutdown || !this.connected) return;
-    if (this.reconnectTimer) clearTimeout(this.reconnectTimer);
-    this.shutdown = true;
-    this.connection.close();
-  }
-
-  send(packet) {
-    if (!this.connected) return false;
-    this.connection.send(JSON.stringify(packet));
-    return true;
-  }
-
-  get reconnecting() {
-    return this.reconnectTimer !== null;
-  }
-}
+const send = (packet) => {
+  if (!connected) return false;
+  websocket.send(JSON.stringify(packet));
+  return true;
+};
 
 const broadcast = async (packet, exclude = null) => {
+  console.log('BROADCAST');
   const clients = await self.clients.matchAll({ includeUncontrolled: true });
   console.log('Broadcasting to clients:', clients.length, packet);
   for (const client of clients) {
@@ -220,44 +165,81 @@ self.addEventListener('activate', (event) => {
   event.waitUntil(activate());
 });
 
-const client = new Client(config);
-client.onOpen = () => {
-  console.log('Service Worker: this.websocket this.connected');
-  broadcast({ type: 'status', connected: true });
-};
-client.onClose = () => {
-  console.log('Service Worker: websocket disconnected');
-  broadcast({ type: 'status', connected: false });
-};
-client.onError = (error) => {
-  if (client.reconnecting) return;
-  console.error('Service Worker: websocket error', error);
-  broadcast({ type: 'error', error: error.message });
-};
-client.onMessage = (message) => {
-  console.log('Service Worker: websocket message:', message);
-  broadcast(message);
+const connect = async () => {
+  if (connected || connecting) return;
+  connecting = true;
+
+  const protocol = self.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const url = `${protocol}//${self.location.host}`;
+  websocket = new WebSocket(url);
+
+  websocket.onopen = () => {
+    connected = true;
+    connecting = false;
+    if (reconnectTimer) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
+    }
+    console.log('Service Worker: websocket connected');
+    broadcast({ type: 'status', connected: true });
+  };
+
+  websocket.onmessage = (event) => {
+    const message = JSON.parse(event.data);
+    console.log('Service Worker: websocket message:', message);
+    broadcast(message);
+  };
+
+  websocket.onclose = () => {
+    connected = false;
+    connecting = false;
+
+    if (!reconnectTimer) {
+      console.log('Service Worker: websocket disconnected');
+      broadcast({ type: 'status', connected: false });
+    } else {
+      clearTimeout(reconnectTimer);
+    }
+
+    reconnectTimer = setInterval(() => {
+      console.log('Service Worker: Reconnecting...');
+      connect();
+    }, RECONNECT_INTERVAL);
+  };
+
+  websocket.onerror = (error) => {
+    if (!reconnectTimer) {
+      console.error('Service Worker: websocket error', error);
+      broadcast({ type: 'error', error: error.message });
+    }
+  };
 };
 
 const messageHandlers = {
-  online: () => client.connect(),
-  offline: () => void client.close(),
-  ping: () => void client.send({ type: 'ping' }),
+  online: () => connect(),
+  offline: () => {
+    if (connected) websocket.close();
+  },
   message: (event) => {
     const packet = { type: 'message', content: event.data.content };
-    client.send(packet);
+    send(packet);
     broadcast(packet, event.source);
   },
-  updateCache: updateCacheHandler,
+  ping: () => {
+    send({ type: 'ping' });
+  },
+  updateCache: updateCache,
 };
+
 self.addEventListener('message', (event) => {
   console.log('Service Worker: received', event.data);
   const { type } = event.data;
   const handler = messageHandlers[type];
   if (handler) handler(event);
 });
+
 self.addEventListener('beforeunload', (event) => {
   console.log('Service Worker: beforeunload', event);
 });
 
-client.connect();
+connect();
