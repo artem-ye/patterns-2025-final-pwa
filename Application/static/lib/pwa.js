@@ -41,16 +41,18 @@ class EventEmitter {
 }
 
 class PWA extends EventEmitter {
-  logger = null;
   config = {};
+  logger = null;
+  notification = null;
   #worker = null;
   #clientId = null;
   #online = true;
   #installer = null;
 
-  constructor({ config, logger }) {
+  constructor({ config, logger, notification }) {
     super();
     this.config = config;
+    this.notification = notification;
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#initClientId();
     this.#initWorker();

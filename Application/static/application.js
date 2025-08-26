@@ -43,6 +43,12 @@ class Notifications {
   constructor(element, { timeout }) {
     this.element = element;
     this.timeout = timeout ?? 3000;
+
+    const requestPermissions = async () => {
+      await Notification.requestPermission();
+      window.removeEventListener('load', requestPermissions);
+    };
+    window.addEventListener('load', requestPermissions);
   }
 
   static fromId(elementId, opts) {
@@ -59,11 +65,6 @@ class Notifications {
     }, this.timeout);
   }
 
-  static async requestPermission() {
-    const permission = await Notification.requestPermission();
-    return permission === 'granted';
-  }
-
   static async testNotification() {
     const notification = new Notification('PWA Example', {
       body: 'This is a test notification from the PWA!',
@@ -78,12 +79,9 @@ class Notifications {
 }
 
 class App extends PWA {
-  notification = null;
-
   constructor({ config, logger, notification }) {
-    super({ config, logger });
+    super({ config, logger, notification });
     this.getElements();
-    this.setupNotifications(notification);
     this.setupEventListeners();
     this.setupWorkerListeners();
     this.updateUI();
@@ -98,13 +96,6 @@ class App extends PWA {
     this.messageInput = document.getElementById('message-input');
     this.connectionStatus = document.getElementById('connection-status');
     this.installStatus = document.getElementById('install-status');
-  }
-
-  async setupNotifications(instance) {
-    if (!instance) return;
-    this.notification = instance;
-    const permission = await Notifications.requestPermission();
-    this.logger.log('Notification permission:', permission);
   }
 
   setupEventListeners() {
