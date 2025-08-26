@@ -78,7 +78,7 @@ class Notifications {
 }
 
 class App extends PWA {
-  #notifications = null;
+  notifications = null;
 
   constructor({ config, logger, notification }) {
     super({ config, logger });
@@ -102,7 +102,7 @@ class App extends PWA {
 
   async setupNotifications(instance) {
     if (!instance) return;
-    this.#notifications = instance;
+    this.notifications = instance;
     const permission = await Notifications.requestPermission();
     this.logger.log('Notification permission:', permission);
   }
@@ -129,26 +129,26 @@ class App extends PWA {
       const status = connected ? 'connected' : 'disconnected';
       const message = `Service worker ${status}`;
       this.logger.log(message);
-      this.notify(message, connected ? 'success' : 'warning');
+      this.notifications.notify(message, connected ? 'success' : 'warning');
     });
     this.on('message', ({ content }) => {
-      this.notify(`Message: ${content}`, 'info');
+      this.notifications.notify(`Message: ${content}`, 'info');
       this.logger.log('Message:', content);
     });
     this.on('error', ({ error }) => {
       this.logger.log('Service worker error:', error);
-      this.notify('Service worker error', 'error');
+      this.notifications.notify('Service worker error', 'error');
     });
     // TODO: refactor
     this.on('cacheUpdated', () => {
       this.logger.log('Cache updated successfully');
-      this.notify('Cache updated successfully!', 'success');
+      this.notifications.notify('Cache updated successfully!', 'success');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
     });
     this.on('cacheUpdateFailed', ({ error }) => {
       this.logger.log('Cache update failed:', error);
-      this.notify('Cache update failed', 'error');
+      this.notifications.notify('Cache update failed', 'error');
       this.updateCacheBtn.disabled = false;
       this.updateCacheBtn.textContent = 'Update Cache';
     });
@@ -158,7 +158,7 @@ class App extends PWA {
     const content = this.messageInput?.value?.trim();
     this.messageInput.value = '';
     if (!content) {
-      this.notify('Please enter a message', 'warning');
+      this.notifications.notify('Please enter a message', 'warning');
       return;
     }
     this.postMessage(content);
@@ -183,11 +183,6 @@ class App extends PWA {
   updateUI() {
     this.sendMessageBtn.disabled = !this.online;
     this.updateConnectionStatus();
-  }
-
-  notify(message, type = 'info') {
-    if (!this.#notifications) return;
-    this.#notifications.notify(message, type);
   }
 }
 
