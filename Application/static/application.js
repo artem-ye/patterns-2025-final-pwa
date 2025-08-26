@@ -1,5 +1,5 @@
 import { PWA } from './lib/pwa.js';
-import { Logger, Notifications } from './lib/core.components.js';
+import { Logger } from './lib/logger.js';
 
 const config = {
   workerPath: './worker.js',
@@ -12,7 +12,6 @@ class App extends PWA {
     super(opts);
     this.getElements();
     this.setupEventListeners();
-    this.setupWorkerListeners();
     this.updateUI();
   }
 
@@ -25,6 +24,7 @@ class App extends PWA {
     this.messageInput = document.getElementById('message-input');
     this.connectionStatus = document.getElementById('connection-status');
     this.installStatus = document.getElementById('install-status');
+    this.notification = document.getElementById('notification');
   }
 
   setupEventListeners() {
@@ -38,42 +38,11 @@ class App extends PWA {
     });
   }
 
-  setupWorkerListeners() {
-    this.on('installable', () => this.showInstallButton(true));
-    this.on('installed', (installed) => this.showInstallButton(installed));
-
-    this.on('status', ({ connected }) => {
-      this.updateUI();
-      const status = connected ? 'connected' : 'disconnected';
-      const message = `Service worker ${status}`;
-      this.logger.log(message);
-      this.notification.notify(message, connected ? 'success' : 'warning');
-    });
-    this.on('message', ({ content }) => {
-      this.notification.notify(`Message: ${content}`, 'info');
-      this.logger.log('Message:', content);
-    });
-    this.on('error', ({ error }) => {
-      this.logger.log('Service worker error:', error);
-      this.notification.notify('Service worker error', 'error');
-    });
-    this.on('cacheUpdated', ({ error }) => {
-      if (!error) {
-        this.logger.log('Cache updated successfully');
-        this.notification.notify('Cache updated successfully', 'success');
-      } else {
-        this.logger.log('Cache update failed:', error);
-        this.notification.notify('Cache update failed', 'error');
-      }
-      this.updateCacheBtn.disabled = false;
-    });
-  }
-
   async sendMessage() {
     const content = this.messageInput?.value?.trim();
     this.messageInput.value = '';
     if (!content) {
-      this.notification.notify('Please enter a message', 'warning');
+      this.notification.showNotification('Please enter a message', 'warning');
       return;
     }
     this.postMessage({ type: 'message', content });
@@ -95,6 +64,16 @@ class App extends PWA {
     }
   }
 
+  showNotification(message, type = 'info') {
+    const element = this.notification;
+    element.textContent = message;
+    element.className = `notification ${type}`;
+    element.classList.remove('hidden');
+    setTimeout(() => {
+      element.classList.add('hidden');
+    }, this.config.notificationTimeout || 3000);
+  }
+
   updateUI() {
     this.sendMessageBtn.disabled = !this.online;
     this.updateConnectionStatus();
@@ -107,8 +86,34 @@ class App extends PWA {
 }
 
 const logger = Logger.fromId('output');
-const notification = Notifications.fromId('notification', {
-  timeout: config.notificationTimeout,
+const app = new App({ config, logger });
+
+app.on('error', ({ error }) => {
+  logger.log('Service worker error:', error);
+  app.showNotification('Service worker error', 'error');
 });
-const app = new App({ config, logger, notification });
-app.on('message', (data) => logger.log('Message', data));
+app.on('installable', () => app.showInstallButton(true));
+app.on('installed', (installed) => app.showInstallButton(installed));
+app.on('status', ({ connected }) => {
+  const status = connected ? 'connected' : 'disconnected';
+  const message = `Service worker ${status}`;
+  logger.log(message);
+  app.showNotification(message, connected ? 'success' : 'warning');
+  app.updateUI();
+});
+app.on('cacheUpdated', ({ error }) => {
+  if (!error) {
+    logger.log('Cache updated successfully');
+    app.showNotification('Cache updated successfully', 'success');
+  } else {
+    logger.log('Cache update failed:', error);
+    app.showNotification('Cache update failed', 'error');
+  }
+  app.updateCacheBtn.disabled = false;
+});
+app.on('message', ({ content }) => {
+  logger.log('Message:', content);
+  app.showNotification(`Message: ${content}`, 'info');
+});
+
+export { app };

@@ -57,17 +57,15 @@ const DEF_CONFIG = {
 class PWA extends EventEmitter {
   config = {};
   logger = null;
-  notification = null;
   #worker = null;
   #clientId = null;
   #online = true;
   #installer = null;
   #ready = null;
 
-  constructor({ config, logger, notification, getClientId: clientId }) {
+  constructor({ config, logger, getClientId: clientId }) {
     super();
     this.config = { ...DEF_CONFIG, ...config };
-    this.notification = notification;
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#clientId = clientId ? clientId() : getClientId();
 
@@ -128,6 +126,28 @@ class PWA extends EventEmitter {
     await this.#ready;
     this.#worker.postMessage(data);
     this.logger.log('Sent message:', data);
+  }
+
+  static async requestNotificationsPermissions() {
+    return await Notification.requestPermission();
+  }
+
+  static notify(body, options = {}) {
+    if (Notification.permission !== 'granted') {
+      this.logger.log('Notification not shown. Request permission required');
+      return;
+    }
+    const defaults = {
+      title: 'PWA Application',
+      icon: '/icon.svg',
+      badge: '/icon.svg',
+    };
+    const { title, ...rest } = { ...defaults, ...options, body };
+    const notification = new Notification(title, rest);
+    notification.onclick = () => {
+      window.focus();
+      notification.close();
+    };
   }
 
   get online() {
