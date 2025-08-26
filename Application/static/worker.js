@@ -86,6 +86,7 @@ class WsClient {
     this.connection.onmessage = (event) => {
       this.callback('message', JSON.parse(event.data));
     };
+    this.connection.onerror = (error) => void this.callback('error', error);
   }
 
   close() {
