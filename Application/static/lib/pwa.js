@@ -56,7 +56,7 @@ class PWA extends EventEmitter {
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#initClientId();
     this.#initWorker();
-    this.#initNetworkStatus();
+    this.#initStatus();
     this.#initInstaller();
   }
 
@@ -86,7 +86,7 @@ class PWA extends EventEmitter {
     }
   }
 
-  #initNetworkStatus() {
+  #initStatus() {
     this.#online = navigator.onLine;
     this.on('status', ({ connected }) => {
       this.#online = connected;
