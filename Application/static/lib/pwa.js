@@ -51,7 +51,6 @@ class EventEmitter {
 
 const DEF_CONFIG = {
   workerPath: './worker.js',
-  pingInterval: 25000,
 };
 
 class PWA extends EventEmitter {
@@ -68,7 +67,6 @@ class PWA extends EventEmitter {
     this.config = { ...DEF_CONFIG, ...config };
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#clientId = clientId ? clientId() : getClientId();
-
     this.#ready = this.#initWorker().then(() => true);
     this.#initStatus();
     this.#initInstaller();
@@ -86,10 +84,8 @@ class PWA extends EventEmitter {
     window.addEventListener('beforeunload', () => {
       this.#worker.postMessage({ type: 'disconnect' });
     });
-
-    const ping = () => this.#worker.postMessage({ type: 'ping' });
-    setInterval(ping, this.config.pingInterval);
-    // ???
+    // const ping = () => this.#worker.postMessage({ type: 'ping' });
+    // setInterval(ping, this.config.pingInterval);
     // document.addEventListener('visibilitychange', ping);
   }
 

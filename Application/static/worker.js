@@ -1,4 +1,5 @@
 const RECONNECT_INTERVAL = 3000;
+const PING_INTERVAL = 2500;
 const CACHE_NAME = 'v1';
 const CACHE_ASSETS = [
   '/',
@@ -16,18 +17,21 @@ const CACHE_ASSETS = [
 
 class WsClient {
   reconnectInterval = 0;
+  pingInterval = 0;
   connection = null;
   connected = false;
   connecting = false;
   shutdown = false;
   reconnectTimer = null;
+  pingTimer = null;
   onOpen = null;
   onClose = null;
   onMessage = null;
 
   constructor(options) {
-    const { reconnectInterval } = options;
+    const { reconnectInterval, pingInterval } = options;
     this.reconnectInterval = reconnectInterval || 0;
+    this.pingInterval = pingInterval || 0;
   }
 
   async connect() {
@@ -42,11 +46,18 @@ class WsClient {
       this.connected = true;
       this.connecting = false;
       if (this.reconnectTimer) this.reconnectTimer = null;
+      if (this.pingInterval) {
+        this.pingTimer = setInterval(() => this.ping(), this.pingInterval);
+      }
       this.onOpen();
     };
     this.connection.onclose = () => {
       this.connected = false;
       this.connecting = false;
+      if (this.pingTimer) {
+        clearInterval(this.pingTimer);
+        this.pingTimer = null;
+      }
       if (!this.reconnectTimer) this.onClose();
       if (!this.shutdown && this.reconnectInterval) {
         const connect = () => void this.connect();
@@ -70,6 +81,10 @@ class WsClient {
     if (!this.connected) return false;
     this.connection.send(JSON.stringify(packet));
     return true;
+  }
+
+  ping() {
+    this.send({ type: 'ping' });
   }
 
   get reconnecting() {
@@ -214,7 +229,10 @@ const broadcast = async (packet, exclude = null) => {
 };
 
 const cache = new HttpCache(CACHE_NAME, CACHE_ASSETS);
-const client = new WsClient({ reconnectInterval: RECONNECT_INTERVAL });
+const client = new WsClient({
+  reconnectInterval: RECONNECT_INTERVAL,
+  pingInterval: PING_INTERVAL,
+});
 
 client.onOpen = () => {
   console.log('Service Worker: this.websocket this.connected');
