@@ -42,13 +42,15 @@ class EventEmitter {
 
 class PWA extends EventEmitter {
   logger = null;
+  config = {};
   #worker = null;
   #clientId = null;
   #online = true;
   #installer = null;
 
-  constructor({ logger }) {
+  constructor({ config, logger }) {
     super();
+    this.config = config;
     this.logger = logger || { log: () => {}, clear: () => {} };
     this.#initClientId();
     this.#initWorker();
@@ -57,7 +59,7 @@ class PWA extends EventEmitter {
   }
 
   async #initWorker() {
-    navigator.serviceWorker.register('./worker.js');
+    navigator.serviceWorker.register(this.config.workerPath);
     const registration = await navigator.serviceWorker.ready;
     this.#worker = registration.active;
 
@@ -71,7 +73,7 @@ class PWA extends EventEmitter {
 
     this.#worker.postMessage({ type: 'connect' });
     const ping = () => this.#worker.postMessage({ type: 'ping' });
-    setInterval(ping, 25000);
+    setInterval(ping, this.config.pingInterval);
     document.addEventListener('visibilitychange', ping);
   }
 
@@ -85,6 +87,7 @@ class PWA extends EventEmitter {
 
   #initNetworkStatus() {
     this.#online = navigator.onLine;
+    /*
     window.addEventListener('online', () => {
       this.#online = true;
       this.#worker.postMessage({ type: 'online' });
@@ -95,6 +98,7 @@ class PWA extends EventEmitter {
       this.#worker.postMessage({ type: 'offline' });
       //this.emit('online', false);
     });
+    */
     this.on('status', ({ connected }) => {
       this.#online = connected;
     });

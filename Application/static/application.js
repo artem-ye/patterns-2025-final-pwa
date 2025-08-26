@@ -1,6 +1,6 @@
 import { PWA } from './pwa.js';
 
-const VERSION = '1.1.1';
+const VERSION = '1.1.3';
 
 class Logger {
   #output;
@@ -26,9 +26,14 @@ class Logger {
   }
 }
 
+const config = {
+  workerPath: './worker.js',
+  pingInterval: 25000,
+};
+
 class App extends PWA {
-  constructor({ logger }) {
-    super({ logger });
+  constructor({ config, logger }) {
+    super({ config, logger });
     this.getElements();
     this.setupEventListeners();
     this.setupWorkerListeners();
@@ -162,6 +167,6 @@ class App extends PWA {
   }
 }
 const logger = new Logger('output');
-window.application = new App({ logger });
+window.application = new App({ config, logger });
 
 console.log(`\n\n\n!!! STARTING ${VERSION} !!!\n\n\n`);
