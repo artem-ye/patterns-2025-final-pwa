@@ -77,7 +77,7 @@ class WsClient {
         this.pingTimer = null;
       }
       if (!this.reconnectTimer) this.callback('disconnect');
-      if (!this.shutdown && this.reconnectInterval) {
+      if (this.reconnectInterval && !this.shutdown) {
         const connect = () => void this.connect();
         this.reconnectTimer = setTimeout(connect, this.reconnectInterval);
       }
@@ -150,9 +150,7 @@ class HttpCache {
     self.addEventListener('activate', (event) => {
       event.waitUntil(this.#activate());
     });
-    self.addEventListener('fetch', (event) => {
-      this.#serve(event);
-    });
+    self.addEventListener('fetch', (event) => this.#serve(event));
   }
 
   async #install() {
@@ -287,9 +285,6 @@ const main = (config) => {
     const { type } = event.data;
     const handler = messageHandlers[type];
     if (handler) handler(event);
-  });
-  self.addEventListener('beforeunload', (event) => {
-    console.log('Service Worker: beforeunload', event);
   });
 
   connection.connect();
